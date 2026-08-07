@@ -4,10 +4,12 @@ import { useRouter } from 'expo-router'
 import { dummyConversationData } from '@/assets/assets'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { styles } from '@/assets/styles/MessagesScreen.styles'
-import { Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { ActivityIndicator, FlatList, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { Colors } from '@/constants/Colors'
 import StoriesBar from '@/components/StoriesBar'
+import StoryViewer from '@/components/StoryViewer'
+import Convoitem from '@/components/Convoitem'
 
 export default function MessageScreen() {
   const [conversations, setConversations] = useState<Conversation[]>([])
@@ -22,6 +24,11 @@ export default function MessageScreen() {
       setConversations(dummyConversationData as any)
       setLoading(false)
     }, 3000)
+  }
+  const lowerSearch = search.toLowerCase()
+  const filtered = search ? conversations.filter((c)=>c.participant?.name.toLowerCase().includes(lowerSearch) || c.participant?.handle.toLowerCase().includes(lowerSearch)) : conversations;
+  const openConvo = (c: Conversation) => {
+    router.push(`/chat/${c._id}`);
   }
   useEffect(() => {
     fetchConversations()
@@ -57,10 +64,28 @@ export default function MessageScreen() {
 
       {/* Stories */}
       <StoriesBar onViewStory={(us)=> setSelectedStory(us)}/>
-
+        {selectedStory && <StoryViewer userStory={selectedStory} onClose={()=>setSelectedStory(null)}/>}
       {/* Divider */}
-
+      <View style={styles.divider}/>
       {/* Conversation List */}
+      {loading ? (
+        <ActivityIndicator style={{marginTop: 40}} color={Colors.primary}/>
+      ) : (
+        <FlatList 
+        data={filtered}
+        keyExtractor={(c)=>c._id}
+        contentContainerStyle={styles.listContent}
+        renderItem={({item})=> <Convoitem convo={item} selected={false} onPress={()=>openConvo(item)}
+        />}
+        ListEmptyComponent={
+          <View style={styles.empty}>
+            <Ionicons name='chatbubbles-outline' size={44} color={Colors.outlineVariant}/>
+            <Text style={styles.emptyTitle}>No Conversations yet.</Text>
+            <Text style={styles.emptySubtitle}>Go to Search to start chatting.</Text>
+          </View>
+        }
+        />
+      )}
     </SafeAreaView>
   )
 }
