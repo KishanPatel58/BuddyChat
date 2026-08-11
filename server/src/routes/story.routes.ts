@@ -5,7 +5,6 @@ import { authMiddleware } from '../middlewares/auth.middleware.js';
 const storyRouter = Router();
 
 storyRouter.use(authMiddleware)
-
 storyRouter.post("/", upload.single("file"), createStory);
 storyRouter.get("/", getStories);
 

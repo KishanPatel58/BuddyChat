@@ -4,6 +4,8 @@ import { authMiddleware } from "../middlewares/auth.middleware.js";
 import upload from "../middlewares/upload.middleware.js";
 const messageRouter = Router();
 
+messageRouter.use(authMiddleware);
+
 messageRouter.get("/conversations", getConversations);
 messageRouter.get("/conversations/:conversationId/messages", getMessages);
 messageRouter.get("/conversations/with/:targetUserId", getOrCreateConversation);
