@@ -3,6 +3,7 @@ import { AuthRequest } from '../middlewares/auth.middleware.js';
 import Users from '../models/user.model.js';
 import cloudinary from '../config/cloudinary.config.js';
 import { Readable } from 'stream';
+import { broadcaseUserUpdate } from '../socket/socket.manager.js';
 
 // Get All Users.
 export const getUsers = async (req: AuthRequest, res: Response) => {
@@ -139,6 +140,10 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
     }
 
     const updated = await Users.findByIdAndUpdate(req.user!.id, updateData, {returnDocument: "after"});
+
+    if(updated){
+        broadcaseUserUpdate(updated)
+    }
 
     return res.status(201).json({
         success: true,

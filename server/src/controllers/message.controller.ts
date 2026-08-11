@@ -4,6 +4,7 @@ import Conversations from "../models/conversation.model.js";
 import cloudinary from "../config/cloudinary.config.js";
 import { Readable } from "stream";
 import Messages from "../models/message.model.js";
+import { handleConversationEvent } from "../socket/socket.manager.js";
 
 // Find convo. between two users.
 
@@ -78,7 +79,7 @@ export const sendMessage = async (req: AuthRequest, res: Response) => {
             mediaType = resourceType;
             const uploadPromise = new Promise<{ secure_url: string }>((resolve, rejects) => {
                 const uploadStream = cloudinary.uploader.upload_stream({
-                    folder: "BuddyChat_Avatars",
+                    folder: "BuddyChat_Messages",
                     resource_type: resourceType
                 }, (error, result) => {
                     if (error) {
@@ -179,13 +180,20 @@ export const deleteConversation = async (req: AuthRequest, res: Response) => {
             })
         }
         // Notify other participants before deleting.
+        await handleConversationEvent(userId, String(conversationId), {
+            type: "chat_deleted",
+            conversationId
+        })
+
+        // Delete all the messages in the conversation.
+        await Messages.deleteMany({conversationId})
 
         // Delete the conversation itself.
         await Conversations.findByIdAndDelete(conversationId);
 
         return res.status(201).json({
             success: true,
-            message: "Conversation Deleted Successfully."
+            message: "Chat Deleted Successfully."
         })
     } catch (error) {
         return res.status(500).json({

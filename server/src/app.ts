@@ -3,6 +3,7 @@ import cors from "cors";
 import {clerkMiddleware} from "@clerk/express"
 import userRouter from "./routes/user.routes.js";
 import messageRouter from "./routes/message.routes.js";
+import storyRouter from "./routes/story.routes.js";
 const app = express();
 
 // Middleware Setup.
@@ -26,6 +27,9 @@ app.use("/api/users", userRouter)
 
 // Message Router.
 app.use("/api/messages", messageRouter)
+
+// Stories Router.
+app.use("/api/stories", storyRouter)
 
 // Global Error Handler.
 app.use((err: any, _req: Request, res: Response, _next: NextFunction)=>{
