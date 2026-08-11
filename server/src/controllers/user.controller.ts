@@ -97,8 +97,6 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
             })
         }
     }
-
-
     let avatarUrl = "";
     if (file) {
         try {

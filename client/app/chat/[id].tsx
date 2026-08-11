@@ -1,6 +1,6 @@
 import { View, Text, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator, FlatList, Image, TextInput, Alert } from 'react-native'
 import React, { useEffect, useRef, useState } from 'react'
-import { useRouter } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import { dummyConversationData, dummyMessages, dummyUserProfile, dummyUsers } from '@/assets/assets'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { styles } from '@/assets/styles/ChatScreen.styles'
@@ -11,34 +11,51 @@ import Avatar from '@/components/Avatar'
 import Bubble from '@/components/Bubble'
 import * as ImagePicker from 'expo-image-picker'
 import { LinearGradient } from 'expo-linear-gradient'
+import { UseApp } from '@/context/AppContext'
+import { Message } from '@/types'
+import { api } from '@/api/api'
 
 export default function ChatScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter()
-  let { auth, messages, users, selectedConversation, typingUsers } = {
-    auth: { user: dummyUserProfile },
-    messages: dummyMessages,
-    users: dummyUsers,
-    selectedConversation: dummyConversationData[0],
-    typingUsers: {
-      [dummyUsers[0]._id]: true
-    }
-  }
+  let { auth, messages, users, selectedConversation, typingUsers, setConversations, setMessages, sendWsEvent,setSelectedConversation } = UseApp();
   const [text, setText] = useState("")
   const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(false)
   const [mediaUri, setMediaUri] = useState<string | null>(null)
+  const [mediaMime, setMediaMime] = useState<string>("image/jpeg")
+  const [mediaName, setMediaName] = useState<string>("media.jpg")
   const flatListRef = useRef<FlatList>(null);
+  const typingTimerRef = useRef<ReturnType<typeof setTimeout>>(null);
   const partner = selectedConversation?.participant;
 
-  // Scroll to bottom when messages update.
-  useEffect(() => {
-    if (messages.length > 0) {
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100)
-    }
-  }, [messages])
+
 
   const deleteChat = async () => {
-
+    const msg = `Delete this chat? This cannot be undone.`;
+    Alert.alert("Delete Chat", msg, [
+      {
+        text: "Cancel",
+        style: "cancel"
+      },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            const { data } = await api.delete<{ success: boolean; }>(`/api/messages/conversations/${selectedConversation?._id}`);
+            if (data.success) {
+              setConversations((prev) => prev.filter((c) => c._id !== selectedConversation?._id));
+              setSelectedConversation(null);
+              router.back();
+            }
+          } catch (error) {
+            Alert.alert("Error", "Failed to delete chat.")
+            console.log(error)
+          }
+        }
+      }
+    ])
   }
 
   const pickMedia = async () => {
@@ -52,33 +69,84 @@ export default function ChatScreen() {
       quality: 0.8
     });
     if (!result.canceled && result.assets[0]) {
-      setMediaUri(result.assets[0].uri)
+      const asset = result.assets[0];
+      setMediaUri(asset.uri);
+      setMediaMime(asset.mimeType || "image/jpeg")
+      setMediaName(asset.fileName || (asset.mimeType?.startsWith("video") ? "video.mp4" : "photo.jpg"))
     }
 
   }
 
   const send = async () => {
-    if(!text.trim() && !mediaUri || !selectedConversation) return;
+    if (!text.trim() && !mediaUri || !selectedConversation) return;
     setSending(true);
-    setTimeout(()=>{
-      setSending(false)
-      setText("")
-      setMediaUri(null)
-    },3000)
+    try {
+      const formData = new FormData();
+      formData.append("receiverId", partner!._id);
+      if (text.trim()) formData.append("text", text.trim());
+      if (mediaUri) {
+        formData.append("file", {
+          uri: mediaUri,
+          type: mediaMime,
+          name: mediaName
+        } as any);
+      }
+      const { data } = await api.post<{ success: boolean; message: Message }>("/api/messages/send", formData, {
+        headers: { "Content-Type": "multipart/form-data" }
+      })
+      if (data.success) {
+        setMessages((prev) => [...prev, data.message]);
+        const target = { receiverId: partner!._id };
+        sendWsEvent({ type: "message", ...target, payload: data.message });
+        setText("");
+        setMediaUri(null);
+      }
+    } catch (err: any) {
+      Alert.alert("Error", err?.response?.data?.message || "Failed to send message.")
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleTyping = (val: string) => {
     setText(val)
+    const target = { receiverId: partner?._id };
+    if (!target.receiverId) return;
+    sendWsEvent({ type: "typing", ...target, isTyping: true });
+    if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+    typingTimerRef.current = setTimeout(() => {
+      sendWsEvent({ type: "typing", ...target, isTyping: false })
+    }, 1500)
   }
 
   // Typing indicator helpers.
 
   const typingEntries = Object.entries(typingUsers).filter(([uid, isTyping]) => {
     if (!isTyping || uid === auth.user?._id) return false;
-    return partner._id === uid;
+    return partner?._id === uid;
   })
 
+  // Function to load the chat.
+  useEffect(() => {
+    if (!id) return;
+    setLoading(true);
+    const fetchMessages = () => {
+      api.get<{ success: boolean; messages: Message[] }>(`/api/messages/conversations/${id}/messages`).then(({ data }) => {
+        if (data.success) {
+          setMessages(data.messages)
+          setLoading(false)
+        }
+      }).catch(() => setTimeout(fetchMessages, 1000))
+    }
+    fetchMessages();
+  }, [id])
 
+  // Scroll to bottom when messages update.
+  useEffect(() => {
+    if (messages.length > 0) {
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100)
+    }
+  }, [messages])
 
   if (!selectedConversation) {
     return (
@@ -93,7 +161,7 @@ export default function ChatScreen() {
       </SafeAreaView>
     )
   }
-  const headerName = partner?.name;
+  const headerName = partner?.name || "Anonymous";
   const headerAvatar = partner?.avatar;
   const headerSub = partner?.isOnline ? "Online" : partner?.lastSeen ? `Last Seen ${formatTime(partner.lastSeen)}` : "Offline";
 

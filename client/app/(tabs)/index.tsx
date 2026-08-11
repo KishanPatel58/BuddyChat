@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Conversation, UserStory } from '@/types'
 import { useRouter } from 'expo-router'
-import { dummyConversationData } from '@/assets/assets'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { styles } from '@/assets/styles/MessagesScreen.styles'
 import { ActivityIndicator, FlatList, Text, TextInput, TouchableOpacity, View } from 'react-native'
@@ -10,6 +9,7 @@ import { Colors } from '@/constants/Colors'
 import StoriesBar from '@/components/StoriesBar'
 import StoryViewer from '@/components/StoryViewer'
 import Convoitem from '@/components/Convoitem'
+import { api } from '@/api/api'
 
 export default function MessageScreen() {
   const [conversations, setConversations] = useState<Conversation[]>([])
@@ -20,10 +20,12 @@ export default function MessageScreen() {
 
   const fetchConversations = async () => {
     setLoading(true)
-    setTimeout(() => {
-      setConversations(dummyConversationData as any)
-      setLoading(false)
-    }, 3000)
+    api.get<{success: boolean; conversations: Conversation[]}>("/api/messages/conversations").then(({data})=>{{
+      if(data.success) setConversations(data.conversations);
+      setLoading(false);
+    }}).catch(()=>{
+      setTimeout(fetchConversations, 1000)
+    })
   }
   const lowerSearch = search.toLowerCase()
   const filtered = search ? conversations.filter((c)=>c.participant?.name.toLowerCase().includes(lowerSearch) || c.participant?.handle.toLowerCase().includes(lowerSearch)) : conversations;

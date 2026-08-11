@@ -8,7 +8,8 @@ import { Colors } from '@/constants/Colors';
 import Avatar from '@/components/Avatar';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker'
-import { api, UseApp } from '@/context/AppContext';
+import { UseApp } from '@/context/AppContext';
+import { api } from '@/api/api';
 export default function profile() {
 
   const { auth, logout, updateUser } = UseApp();
@@ -54,15 +55,15 @@ export default function profile() {
         } as any)
       }
 
-      const {data} = await api.put("/api/users/profile",formData,{
-        headers:{
-          "Content-Type":"multipart/form-data"
+      const { data } = await api.put("/api/users/profile", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data"
         }
       })
-      if(data.success){
+      if (data.success) {
         await updateUser(data.user)
-        if(data.user.avatar) setSavedAvatar(data.user.avatar);
-        Alert.alert("Success","Profile Updated!")
+        if (data.user.avatar) setSavedAvatar(data.user.avatar);
+        Alert.alert("Success", "Profile Updated!")
         setEditMode(false)
         setAvatarUri(null)
       }
@@ -87,11 +88,12 @@ export default function profile() {
   }
   const getUser = async () => {
     try {
-      const {data} = await api.get("/api/users/profile");
+      const { data } = await api.get("/api/users/profile");
+      console.log("PROFILE RESPONSE:", data);
       setProfileName(data.user?.name);
       setProfileHandle(data.user?.handle);
       setProfileBio(data.user?.bio);
-      if(data.user?.avatar){
+      if (data.user?.avatar) {
         setSavedAvatar(data.user?.avatar);
         setAvatarUri(null);
       }
@@ -100,9 +102,9 @@ export default function profile() {
     }
   }
 
-  useEffect(()=>{
+  useEffect(() => {
     getUser()
-  },[])
+  }, [])
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <ScrollView contentContainerStyle={styles.scroll}>
